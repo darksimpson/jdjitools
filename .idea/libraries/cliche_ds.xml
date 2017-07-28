@@ -1,0 +1,9 @@
+<component name="libraryTable">
+  <library name="cliche-ds">
+    <CLASSES>
+      <root url="jar://$PROJECT_DIR$/lib/cliche-ds.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>
