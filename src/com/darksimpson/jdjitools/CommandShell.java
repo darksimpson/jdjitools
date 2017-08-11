@@ -4,11 +4,15 @@ import asg.cliche.Command;
 import asg.cliche.Param;
 import asg.cliche.Shell;
 import asg.cliche.ShellFactory;
+import com.darksimpson.jdjitools.duml.Decoder1;
+import com.darksimpson.jdjitools.duml.Message1;
 import com.darksimpson.jdjitools.primitives.DecryptFTPFile;
 import com.darksimpson.jdjitools.primitives.DeriveKey;
+import com.fazecast.jSerialComm.SerialPort;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.Charset;
 
 public class CommandShell {
 	private static final String JDJITOOLS_VERSION = "1.0";
@@ -32,7 +36,7 @@ public class CommandShell {
 			cs.thisShell.outputSimple("Type \"?help\" if you are new to this tool\n");
 			cs.thisShell.commandLoop();
 		} catch (IOException e) {
-			System.err.println("IO exception during command thisShell session");
+			System.err.println("IO exception during command shell session");
 			e.printStackTrace();
 		}
 	}
@@ -87,5 +91,96 @@ public class CommandShell {
 	@Command(name="decrypt-ftp-file", abbrev="dff", description="Decrypt file downloaded from DJI device on-board FTP daemon (same input and output file)")
 	public void cliDecryptFTPFile(@Param(name="file-name", description="Encrypted file name, contents will be overwritten with decrypted data") String fileName) throws JDTException {
 		cliDecryptFTPFile(fileName, fileName);
+	}
+
+	@Command(name="list-serial-ports", abbrev="lsp", description="List serial ports available in your system")
+	public void cliListSerialPorts() throws JDTException {
+		SerialPort[] ports = SerialPort.getCommPorts();
+
+		if (ports.length > 0) {
+			thisShell.outputSimple("Name, Description");
+			thisShell.outputSimple("-----------------");
+
+			for (SerialPort port : ports) {
+				thisShell.outputSimple(port.getSystemPortName() + ", " + Utils.singleByteStringToString(port.getDescriptivePortName()));
+			}
+		} else {
+			thisShell.outputSimple("No serial ports found!");
+		}
+	}
+
+	@Command(name="monitor-duml", abbrev="md", description="Decode and print all incoming DUML traffic")
+	public void cliMonitorDuml(@Param(name="serial-name", description="Serial port name") String serialName) throws JDTException {
+		SerialPort port = SerialPort.getCommPort(serialName);
+
+		// Try to open port firstly
+		if (port.openPort()) {
+			thisShell.outputSimple("Now monitoring incoming DUML...");
+
+			// Worker DUML monitoring thread class
+			class DumlMonitorThread extends Thread {
+				public void run() {
+					thisShell.outputSimple("");
+					Decoder1 decoder1 = new Decoder1();
+					try {
+						while (!this.isInterrupted())
+						{
+							// Sleep this thread till some bytes will be available on serial input
+							while (port.bytesAvailable() == 0) {
+								try {
+									Thread.sleep(20);
+								} catch (InterruptedException e) {
+									thisShell.outputSimple("Monitoring was interrupted");
+									return; // We need to exit from this thread worker explicitly!
+								}
+							}
+
+							// Read serial input data
+							byte[] readBuffer = new byte[port.bytesAvailable()];
+							int numRead = port.readBytes(readBuffer, readBuffer.length);
+
+							// Enqueue data to Decoder1 (and implicitly try to decode it)
+							decoder1.enqueueBytes(readBuffer, numRead);
+
+							// Print out some messages if it was decoded and enqueued
+							while (decoder1.getMessagesCount() > 0) {
+								Message1 message = decoder1.getMessage();
+								String messageStr = String.format("Src: 0x%02X, Tgt: 0x%02X, Seq: 0x%04X, [%s %s], CmdSet: 0x%02X, CmdNum: 0x%02X, Data:\n",
+									message.getMessageSource(), message.getMessageTarget(), message.getMessageSequence(),
+									(message.getMessageFlagIsResponse() ? "RESP," : "REQ, "),
+									(message.getMessageFlagWantResponse() ? "WACK " : "DWACK"),
+									message.getMessageCommandSet(), message.getMessageCommandNum());
+								messageStr += "0x" + Utils.bytesToHexString(message.getMessageData()) + "\n";
+								messageStr += new String(message.getMessageData(), Charset.defaultCharset()) + "\n";
+								thisShell.outputSimple(messageStr);
+							}
+						}
+					} catch (Exception e) {
+						thisShell.outputSimple("Exception while monitoring DUML: " + e.getMessage());
+					}
+				}
+			}
+
+			// Start new DUML monitoring thread
+			DumlMonitorThread monitorThread = new DumlMonitorThread();
+			monitorThread.setName("DUML monitor thread");
+			monitorThread.start();
+
+			// Pause this thread (wait for input)
+			thisShell.inputSimple("Press return to exit monitor ");
+
+			// Interrupt and kill monitoring thread
+			monitorThread.interrupt();
+			try {
+				monitorThread.join();
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+
+			// Close serial port
+			port.closePort();
+		} else {
+			thisShell.outputSimple("Can't open specified serial port!");
+		}
 	}
 }
