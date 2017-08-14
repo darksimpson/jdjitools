@@ -10,7 +10,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
-public class DeriveKey {
+public class DjiDeriveKey {
 	public byte[] deriveKey(byte[] inKey, String inParam, int outKeyLen) throws JDTException {
 		// Do some checks
 		if (inKey.length != 32) {

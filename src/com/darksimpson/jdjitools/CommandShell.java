@@ -7,10 +7,11 @@ import asg.cliche.ShellFactory;
 import com.darksimpson.jdjitools.duml.Decoder1;
 import com.darksimpson.jdjitools.duml.Message1;
 import com.darksimpson.jdjitools.primitives.DecryptFTPFile;
-import com.darksimpson.jdjitools.primitives.DeriveKey;
+import com.darksimpson.jdjitools.primitives.DjiDeriveKey;
 import com.fazecast.jSerialComm.SerialPort;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.charset.Charset;
 
@@ -51,8 +52,8 @@ public class CommandShell {
 			"especially: @freaky123, @hostile, @the_lord and many others...";
 	}
 
-	@Command(name="derive-key", abbrev="dk", description="DJI primitive for ciphering/scrambling/authentication key derivation (with variable derived key length)")
-	public String cliDeriveKey(@Param(name="src-key", description="Source key (32 symbols hexadecimal string)") String srcKey,
+	@Command(name="util-dji-derive-key", abbrev="uddk", description="DJI primitive for ciphering/scrambling/authentication key derivation (variable derived key length)")
+	public String cliUtilDjiDeriveKey(@Param(name="src-key", description="Source key (32 symbols hexadecimal string)") String srcKey,
 														 @Param(name="src-param", description="Source parameter (any length string)") String srcParam,
 														 @Param(name="out-key-len", description="Wanted output (derived) key length (from 1 to 32)") Integer outKeyLen) throws JDTException {
 		byte[] keyBytes;
@@ -63,21 +64,21 @@ public class CommandShell {
 			throw new JDTException("Error converting key " + srcKey + " from hexadecimal string to binary: " + e.getMessage());
 		}
 
-		DeriveKey dk = new DeriveKey();
+		DjiDeriveKey dk = new DjiDeriveKey();
 
 		thisShell.outputSimple("Derived key is:");
 
 		return Utils.bytesToHexString(dk.deriveKey(keyBytes, srcParam, outKeyLen));
 	}
 
-	@Command(name="derive-key", abbrev="dk", description="DJI primitive for ciphering/scrambling/authentication key derivation (with default derived key length of 16 bytes)")
-	public String cliDeriveKey(@Param(name="src-key", description="Source key (32 symbols hexadecimal string)") String srcKey,
+	@Command(name="util-dji-derive-key", abbrev="uddk", description="DJI primitive for ciphering/scrambling/authentication key derivation (derived key length of 16 bytes)")
+	public String cliUtilDjiDeriveKey(@Param(name="src-key", description="Source key (32 symbols hexadecimal string)") String srcKey,
 														 @Param(name="src-param", description="Source parameter (any length string)") String srcParam) throws JDTException {
-		return cliDeriveKey(srcKey, srcParam, 16);
+		return cliUtilDjiDeriveKey(srcKey, srcParam, 16);
 	}
 
-	@Command(name="decrypt-ftp-file", abbrev="dff", description="Decrypt file downloaded from DJI device on-board FTP daemon (different input and output files)")
-	public void cliDecryptFTPFile(@Param(name="in-file-name", description="Encrypted (input) file name to read data from") String inFileName,
+	@Command(name="util-decrypt-ftp-file", abbrev="udff", description="Decrypt file downloaded from DJI device on-board FTP daemon (different input and output files)")
+	public void cliUtilDecryptFTPFile(@Param(name="in-file-name", description="Encrypted (input) file name to read data from") String inFileName,
 																@Param(name="out-file-name", description="Decrypted (output) file name to write data to") String outFileName) throws JDTException {
 		thisShell.outputSimple("Decrypting file '" + inFileName + "'...");
 
@@ -88,13 +89,13 @@ public class CommandShell {
 		thisShell.outputSimple("Done decrypting to '" + outFileName + "'");
 	}
 
-	@Command(name="decrypt-ftp-file", abbrev="dff", description="Decrypt file downloaded from DJI device on-board FTP daemon (same input and output file)")
-	public void cliDecryptFTPFile(@Param(name="file-name", description="Encrypted file name, contents will be overwritten with decrypted data") String fileName) throws JDTException {
-		cliDecryptFTPFile(fileName, fileName);
+	@Command(name="util-decrypt-ftp-file", abbrev="udff", description="Decrypt file downloaded from DJI device on-board FTP daemon (same input and output file)")
+	public void cliUtilDecryptFTPFile(@Param(name="file-name", description="Encrypted file name, contents will be overwritten with decrypted data") String fileName) throws JDTException {
+		cliUtilDecryptFTPFile(fileName, fileName);
 	}
 
-	@Command(name="list-serial-ports", abbrev="lsp", description="List serial ports available in your system")
-	public void cliListSerialPorts() throws JDTException {
+	@Command(name="serial-list-serial-ports", abbrev="slsp", description="List serial ports available in your system")
+	public void cliSerialListSerialPorts() throws JDTException {
 		SerialPort[] ports = SerialPort.getCommPorts();
 
 		if (ports.length > 0) {
@@ -109,23 +110,46 @@ public class CommandShell {
 		}
 	}
 
-	@Command(name="monitor-duml", abbrev="md", description="Decode and print all incoming DUML traffic")
-	public void cliMonitorDuml(@Param(name="serial-name", description="Serial port name") String serialName) throws JDTException {
-		SerialPort port = SerialPort.getCommPort(serialName);
+	private String printDumlMessage(Message1 message) {
+		// Format message
+		String messageStr = String.format("Src: 0x%02X, Tgt: 0x%02X, Seq: 0x%04X, [%s %s], CmdSet: 0x%02X, CmdNum: 0x%02X, Data:\n",
+			message.getMessageSource(), message.getMessageTarget(), message.getMessageSequence(),
+			(message.getMessageFlagIsResponse() ? "RESP," : "REQ, "),
+			(message.getMessageFlagWantResponse() ? "WACK " : "DWACK"),
+			message.getMessageCommandSet(), message.getMessageCommandNum());
+
+		// Print data hex
+		messageStr += "0x" + Utils.bytesToHexString(message.getMessageData()) + "\n";
+
+		// Print data as string also
+		messageStr += new String(message.getMessageData(), Charset.defaultCharset()) + "\n";
+
+		return messageStr;
+	}
+
+	@Command(name="duml-monitor-serial-port", abbrev="dmsp", description="Monitor, decode and print all DUML packets goes to serial port (output to file)")
+	public void cliDumlMonitorSerialPort(@Param(name="in-serial-name", description="Input serial port name") String inSerialName,
+														           @Param(name="out-file-name", description="Output text file name") String outFileName) throws JDTException {
+		TextOutputter out;
+
+		// Create file or shell outputter
+		out = TextOutputter.createOutputter(thisShell, outFileName);
+
+		SerialPort port = SerialPort.getCommPort(inSerialName);
 
 		// Try to open port firstly
 		if (port.openPort()) {
-			thisShell.outputSimple("Now monitoring incoming DUML...");
+			thisShell.outputSimple("Monitoring incoming DUML on serial port...");
 
-			// Worker DUML monitoring thread class
+			// Start new DUML monitoring thread
 			class DumlMonitorThread extends Thread {
 				public void run() {
-					thisShell.outputSimple("");
+					// Create decoder
 					Decoder1 decoder1 = new Decoder1();
 					try {
 						while (!this.isInterrupted())
 						{
-							// Sleep this thread till some bytes will be available on serial input
+							// Sleep this thread till some bytes will be available on input serial input
 							while (port.bytesAvailable() == 0) {
 								try {
 									Thread.sleep(20);
@@ -135,7 +159,7 @@ public class CommandShell {
 								}
 							}
 
-							// Read serial input data
+							// Read input data
 							byte[] readBuffer = new byte[port.bytesAvailable()];
 							int numRead = port.readBytes(readBuffer, readBuffer.length);
 
@@ -144,36 +168,30 @@ public class CommandShell {
 
 							// Print out some messages if it was decoded and enqueued
 							while (decoder1.getMessagesCount() > 0) {
-								Message1 message = decoder1.getMessage();
-								String messageStr = String.format("Src: 0x%02X, Tgt: 0x%02X, Seq: 0x%04X, [%s %s], CmdSet: 0x%02X, CmdNum: 0x%02X, Data:\n",
-									message.getMessageSource(), message.getMessageTarget(), message.getMessageSequence(),
-									(message.getMessageFlagIsResponse() ? "RESP," : "REQ, "),
-									(message.getMessageFlagWantResponse() ? "WACK " : "DWACK"),
-									message.getMessageCommandSet(), message.getMessageCommandNum());
-								messageStr += "0x" + Utils.bytesToHexString(message.getMessageData()) + "\n";
-								messageStr += new String(message.getMessageData(), Charset.defaultCharset()) + "\n";
-								thisShell.outputSimple(messageStr);
+								out.outputWriteLine(printDumlMessage(decoder1.getMessage()));
 							}
 						}
 					} catch (Exception e) {
 						thisShell.outputSimple("Exception while monitoring DUML: " + e.getMessage());
+						//e.printStackTrace();
 					}
 				}
 			}
-
-			// Start new DUML monitoring thread
 			DumlMonitorThread monitorThread = new DumlMonitorThread();
-			monitorThread.setName("DUML monitor thread");
+			monitorThread.setName("DUML monitor/decode thread");
 			monitorThread.start();
 
-			// Pause this thread (wait for input)
-			thisShell.inputSimple("Press return to exit monitor ");
+			// Pause this thread (wait for input) if monitoring from serial port
+			thisShell.inputSimple("Press return to stop ");
+			thisShell.outputSimple("");
 
-			// Interrupt and kill monitoring thread
+			// Interrupt and kill monitoring thread if monitoring from serial port
 			monitorThread.interrupt();
+
+			// Wait till thread finishes its work
 			try {
 				monitorThread.join();
-			} catch (InterruptedException e) {
+			} catch (Exception e) {
 				e.printStackTrace();
 			}
 
@@ -182,5 +200,87 @@ public class CommandShell {
 		} else {
 			thisShell.outputSimple("Can't open specified serial port!");
 		}
+
+		// Close outputter
+		out.outputFinish();
+	}
+
+	@Command(name="duml-monitor-serial-port", abbrev="dmsp", description="Monitor, decode and print all DUML packets goes to serial port (output to console)")
+	public void cliDumlMonitorSerialPort(@Param(name="in-serial-name", description="Input serial port name") String inSerialName) throws JDTException {
+		cliDumlMonitorSerialPort(inSerialName, null);
+	}
+
+	@Command(name="duml-decode-binary-file", abbrev="ddbf", description="Read, decode and print all DUML packets read from binary file (output to file)")
+	public void cliDumlDecodeBinaryFile(@Param(name="in-file-name", description="Input binary file name") String inFileName,
+														          @Param(name="out-file-name", description="Output text file name") String outFileName) throws JDTException {
+		TextOutputter out;
+
+		// Create file or shell outputter
+		out = TextOutputter.createOutputter(thisShell, outFileName);
+
+		FileInputStream fileInputStream;
+
+		File inputFile = new File(inFileName);
+		try {
+			fileInputStream = new FileInputStream(inputFile);
+		} catch (Exception e) {
+			throw new JDTException("Can't open input file '" + inputFile.getAbsolutePath() +"'!");
+		}
+
+		thisShell.outputSimple("Decoding incoming DUML from file...");
+
+		// Process decoding
+		Decoder1 decoder1 = new Decoder1();
+		try {
+			while (true)
+			{
+				// Check that there is still some data to read from input file
+				int availToRead;
+				try {
+					availToRead = (fileInputStream.available() >= 1024) ? 1024 : fileInputStream.available();
+				} catch (Exception e) {
+					throw new JDTException("Error getting available bytes to read from file!");
+				}
+				if (availToRead == 0) {
+					thisShell.outputSimple("End of input file reached");
+					return;
+				}
+
+				// Read input data
+				byte[] readBuffer = new byte[availToRead];
+				int numRead;
+				try {
+					numRead = fileInputStream.read(readBuffer);
+				} catch (IOException e) {
+					throw new JDTException("Error reading data from file!");
+				}
+
+				// Enqueue data to Decoder1 (and implicitly try to decode it)
+				decoder1.enqueueBytes(readBuffer, numRead);
+
+				// Print out some messages if it was decoded and enqueued
+				while (decoder1.getMessagesCount() > 0) {
+					out.outputWriteLine(printDumlMessage(decoder1.getMessage()));
+				}
+			}
+		} catch (Exception e) {
+			thisShell.outputSimple("Exception while decoding DUML: " + e.getMessage());
+			//e.printStackTrace();
+		}
+
+		// Close input file
+		try {
+			fileInputStream.close();
+		} catch (Exception e) {
+			// Do nothing
+		}
+
+		// Close outputter
+		out.outputFinish();;
+	}
+
+	@Command(name="duml-decode-binary-file", abbrev="ddbf", description="Read, decode and print all DUML packets read from binary file (output to console)")
+	public void cliDumlDecodeBinaryFile(@Param(name="in-file-name", description="Input binary file name") String inFileName) throws JDTException {
+		cliDumlDecodeBinaryFile(inFileName, null);
 	}
 }

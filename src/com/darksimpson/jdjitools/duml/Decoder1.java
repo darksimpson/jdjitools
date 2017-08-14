@@ -65,7 +65,7 @@ public class Decoder1 {
 					// Check that version and CRC8 matches
 					if ((fh[2] == (byte) 0x04) && (Utils.calcDjiCrc8(fh, 3) == fh[3])) {
 						// Version and CRC8 match, proceed if we have needed amount of bytes in input buffer for rest of frame
-						if (inputBuffer.limit() - inputBuffer.position() > fh[1] - 4) {
+						if (inputBuffer.limit() - inputBuffer.position() >= fh[1] - 4) {
 							debugIncompleteFrameBodyArm = false;
 							// Allocate full frame
 							byte[] ff = new byte[fh[1]];
