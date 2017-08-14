@@ -10,9 +10,10 @@ Despite that almost all of the functionality is available in other #DeejayeyeHac
 Also you need to know that I have a small spare time to work on this project so overall progress can move veeeery slowly.
 
 At this moment available:
-- Key derivation snippet: A clone of internal DJI algo that may be helpful if you dig deeply in reversing
+- Key derivation util: A clone of internal DJI algo that may be helpful if you dig deeply in reversing
 - FTPd decryptor util: Decrypt files downloaded from DJI product onboard FTP server (with correct descrambling of first bytes and padding handling)
-- DUML monitor/spy util: Decode, organize and display incoming DUML traffic from device
+- DUML monitor util: Monitor and display (or save to text file) incoming DUML traffic from serial device
+- DUML decoder util: Decode and display (or save to text file) DUML traffic from (captured) binary file
 
 WIP now (need some rework/clean up before publishing):
 - DUML command util: Possibility to freely execute any needed DUML command
