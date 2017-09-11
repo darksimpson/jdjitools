@@ -48,7 +48,7 @@ interface TextOutputter {
 		}
 	}
 
-	public static TextOutputter createOutputter(Shell shell, String fileName) throws JDTException {
+	static TextOutputter createOutputter(Shell shell, String fileName) throws JDTException {
 		if (fileName != null) {
 			File outFile = new File(fileName);
 			shell.outputSimple("Outputting to '" + outFile.getAbsolutePath() + "' file.");

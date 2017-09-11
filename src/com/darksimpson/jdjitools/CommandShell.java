@@ -4,8 +4,7 @@ import asg.cliche.Command;
 import asg.cliche.Param;
 import asg.cliche.Shell;
 import asg.cliche.ShellFactory;
-import com.darksimpson.jdjitools.duml.Decoder1;
-import com.darksimpson.jdjitools.duml.Message1;
+import com.darksimpson.jdjitools.duml.*;
 import com.darksimpson.jdjitools.primitives.DecryptFTPFile;
 import com.darksimpson.jdjitools.primitives.DjiDeriveKey;
 import com.fazecast.jSerialComm.SerialPort;
@@ -13,7 +12,7 @@ import com.fazecast.jSerialComm.SerialPort;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
-import java.nio.charset.Charset;
+import java.util.Arrays;
 
 public class CommandShell {
 	private static final String JDJITOOLS_VERSION = "1.0";
@@ -27,6 +26,8 @@ public class CommandShell {
 		"/___/ ver. " + JDJITOOLS_VERSION + ", (c) " + JDJITOOLS_COPYRIGHT + "\n";
 
 	private Shell thisShell;
+
+	private static final long RESP_WAIT_TIMEOUT_MS = 10000;
 
 	public static void main(String[] args) {
 		try {
@@ -110,23 +111,6 @@ public class CommandShell {
 		}
 	}
 
-	private String printDumlMessage(Message1 message) {
-		// Format message
-		String messageStr = String.format("Src: 0x%02X, Tgt: 0x%02X, Seq: 0x%04X, [%s %s], CmdSet: 0x%02X, CmdNum: 0x%02X, Data:\n",
-			message.getMessageSource(), message.getMessageTarget(), message.getMessageSequence(),
-			(message.getMessageFlagIsResponse() ? "RESP," : "REQ, "),
-			(message.getMessageFlagWantResponse() ? "WACK " : "DWACK"),
-			message.getMessageCommandSet(), message.getMessageCommandNum());
-
-		// Print data hex
-		messageStr += "0x" + Utils.bytesToHexString(message.getMessageData()) + "\n";
-
-		// Print data as string also
-		messageStr += new String(message.getMessageData(), Charset.defaultCharset()) + "\n";
-
-		return messageStr;
-	}
-
 	@Command(name="duml-monitor-serial-port", abbrev="dmsp", description="Monitor, decode and print all DUML packets goes to serial port (output to file)")
 	public void cliDumlMonitorSerialPort(@Param(name="in-serial-name", description="Input serial port name") String inSerialName,
 														           @Param(name="out-file-name", description="Output text file name") String outFileName) throws JDTException {
@@ -144,8 +128,9 @@ public class CommandShell {
 			// Start new DUML monitoring thread
 			class DumlMonitorThread extends Thread {
 				public void run() {
-					// Create decoder
 					Decoder1 decoder1 = new Decoder1();
+					Printer1 printer1 = new Printer1();
+
 					try {
 						while (!this.isInterrupted())
 						{
@@ -168,7 +153,7 @@ public class CommandShell {
 
 							// Print out some messages if it was decoded and enqueued
 							while (decoder1.getMessagesCount() > 0) {
-								out.outputWriteLine(printDumlMessage(decoder1.getMessage()));
+								out.outputWriteLine(printer1.printDumlMessage(decoder1.getMessage()));
 							}
 						}
 					} catch (Exception e) {
@@ -229,8 +214,9 @@ public class CommandShell {
 
 		thisShell.outputSimple("Decoding incoming DUML from file...");
 
-		// Process decoding
 		Decoder1 decoder1 = new Decoder1();
+		Printer1 printer1 = new Printer1();
+
 		try {
 			while (true)
 			{
@@ -260,7 +246,7 @@ public class CommandShell {
 
 				// Print out some messages if it was decoded and enqueued
 				while (decoder1.getMessagesCount() > 0) {
-					out.outputWriteLine(printDumlMessage(decoder1.getMessage()));
+					out.outputWriteLine(printer1.printDumlMessage(decoder1.getMessage()));
 				}
 			}
 		} catch (Exception e) {
@@ -282,5 +268,143 @@ public class CommandShell {
 	@Command(name="duml-decode-binary-file", abbrev="ddbf", description="Read, decode and print all DUML packets read from binary file (output to console)")
 	public void cliDumlDecodeBinaryFile(@Param(name="in-file-name", description="Input binary file name") String inFileName) throws JDTException {
 		cliDumlDecodeBinaryFile(inFileName, null);
+	}
+
+	@Command(name="duml-send-arbitrary-message", abbrev="dsam", description="Send any DUML message to device and (if you need) wait/decode response")
+	public void cliDumlSendArbitraryMessage(@Param(name="serial-name", description="Serial port name") String serialName,
+																					@Param(name="duml-msg-src", description="DUML message source (hex or integer)") String dumlMsgSrc,
+																					@Param(name="duml-msg-tgt", description="DUML message target (hex or integer)") String dumlMsgTgt,
+																					@Param(name="duml-msg-seq", description="DUML message sequence (hex or integer)") String dumlMsgSeq,
+																					@Param(name="duml-msg-want-rsp", description="DUML message 'want response' (WACK) flag (boolean)") boolean dumlMsgWantRsp,
+																					@Param(name="duml-msg-cmd-set", description="DUML message command set (hex or integer)") String dumlMsgCmdSet,
+																					@Param(name="duml-msg-cmd-num", description="DUML message command number (hex or integer)") String dumlMsgCmdNum,
+																					@Param(name="duml-msg-data", description="DUML message data (hex or string), single or multiple times") String... dumlMsgData) throws JDTException {
+		byte[] dumlMsgSrcB = Utils.getBytesFromHexOrIntString(dumlMsgSrc, 255);
+		byte[] dumlMsgTgtB = Utils.getBytesFromHexOrIntString(dumlMsgTgt, 255);
+		byte[] dumlMsgSeqB = Utils.getBytesFromHexOrIntString(dumlMsgSeq, 65535);
+		byte[] dumlMsgCmdSetB = Utils.getBytesFromHexOrIntString(dumlMsgCmdSet, 255);
+		byte[] dumlMsgCmdNumB = Utils.getBytesFromHexOrIntString(dumlMsgCmdNum, 255);
+		byte[] dumlMsgDataB = new byte[0];
+
+		if (dumlMsgData != null) {
+			ByteArrayBuilder bab = new ByteArrayBuilder();
+			for (String entry: dumlMsgData) {
+				bab.append(Utils.getBytesFromHexOrString(entry));
+			}
+			dumlMsgDataB = bab.toBytes();
+		}
+
+		// Now form and fill new message
+		Message1 outMessage = new Message1();
+		outMessage.setMessageSource(dumlMsgSrcB[0]);
+		outMessage.setMessageTarget(dumlMsgTgtB[0]);
+		try {
+			outMessage.setMessageSequence(dumlMsgSeqB);
+		} catch (DumlException e) {
+			throw new JDTException();
+		}
+		outMessage.setMessageFlagWantResponse(dumlMsgWantRsp);
+		outMessage.setMessageCommandSet(dumlMsgCmdSetB[0]);
+		outMessage.setMessageCommandNum(dumlMsgCmdNumB[0]);
+		outMessage.setMessageData(dumlMsgDataB);
+
+		Encoder1 encoder1 = new Encoder1();
+		Decoder1 decoder1 = new Decoder1();
+		Printer1 printer1 = new Printer1();
+
+		// Encode message
+		byte[] messageBytes = encoder1.encodeMessage(outMessage);
+
+		// Print output message
+		try {
+			decoder1.enqueueBytes(messageBytes, messageBytes.length);
+			Message1 decMessage = decoder1.getMessage();
+			thisShell.outputSimple("Your message is:");
+			thisShell.outputSimple(printer1.printDumlMessage(decMessage));
+		} catch (DumlException e) {
+			thisShell.outputSimple("Exception while decoding formed (!) DUML: " + e.getMessage());
+			return;
+		}
+
+		// Open port and send output message
+		SerialPort port = SerialPort.getCommPort(serialName);
+
+		// Try to open port firstly
+		thisShell.outputSimple("Opening port...");
+		if (port.openPort()) {
+
+			// Send message
+			thisShell.outputSimple("Port is opened, sending...");
+			port.writeBytes(messageBytes, messageBytes.length);
+			thisShell.outputSimple("Message sent");
+
+			// Wait for response if needed
+			if (outMessage.getMessageFlagWantResponse()) {
+				thisShell.outputSimple("Waiting for response...");
+
+				long startMillis = System.currentTimeMillis();
+				boolean gotAnswer = false;
+
+				while (!gotAnswer) {
+					if (System.currentTimeMillis() > startMillis + RESP_WAIT_TIMEOUT_MS) {
+						thisShell.outputSimple("Timeout while waiting for response!");
+						break;
+					}
+
+					// If there are some bytes available, process it
+					if (port.bytesAvailable() > 0) {
+						// Read input data
+						byte[] readBuffer = new byte[port.bytesAvailable()];
+						int numRead = port.readBytes(readBuffer, readBuffer.length);
+
+						try {
+							// Enqueue data to Decoder1 (and implicitly try to decode it)
+							decoder1.enqueueBytes(readBuffer, numRead);
+
+							// Print out some messages if it was decoded and enqueued
+							while (decoder1.getMessagesCount() > 0) {
+								Message1 inMessage = decoder1.getMessage();
+
+								// Check if it is our response
+								if (Arrays.equals(inMessage.getMessageSequence(), outMessage.getMessageSequence()) &&
+									  inMessage.getMessageSource() == outMessage.getMessageTarget() &&
+									  inMessage.getMessageTarget() == outMessage.getMessageSource() &&
+									  inMessage.getMessageFlagIsResponse()) {
+									thisShell.outputSimple("Got response message:");
+									thisShell.outputSimple(printer1.printDumlMessage(inMessage));
+									gotAnswer = true;
+									break; // Get out from current loop
+								}
+							}
+						} catch (DumlException e) {
+							// Some exception decoding incoming messages, do nothing ???
+						}
+					} else {
+						// If bytes not available, just sleep some time
+						try {
+							Thread.sleep(20);
+						} catch (InterruptedException e) {
+							// Sleep was interrupted, do nothing
+						}
+					}
+				}
+			}
+
+			// Close port
+			port.closePort();
+		} else {
+			thisShell.outputSimple("Can't open specified serial port!");
+		}
+	}
+
+	@Command(name="duml-send-arbitrary-message", abbrev="dsam", description="Send any DUML message to device and (if you need) wait/decode response")
+	public void cliDumlSendArbitraryMessage(@Param(name="serial-name", description="Serial port name") String serialName,
+																					@Param(name="duml-msg-src", description="DUML message source") String dumlMsgSrc,
+																					@Param(name="duml-msg-tgt", description="DUML message target") String dumlMsgTgt,
+																					@Param(name="duml-msg-seq", description="DUML message sequence") String dumlMsgSeq,
+																					@Param(name="duml-msg-want-rsp", description="DUML message 'want response' (WACK) flag") boolean dumlMsgWantRsp,
+																					@Param(name="duml-msg-cmd-set", description="DUML message command set") String dumlMsgCmdSet,
+																					@Param(name="duml-msg-cmd-num", description="DUML message command number") String dumlMsgCmdNum) throws JDTException {
+		cliDumlSendArbitraryMessage(serialName, dumlMsgSrc, dumlMsgTgt, dumlMsgSeq, dumlMsgWantRsp, dumlMsgCmdSet, dumlMsgCmdNum, null);
 	}
 }

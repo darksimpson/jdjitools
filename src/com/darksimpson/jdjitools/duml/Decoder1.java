@@ -1,6 +1,7 @@
 package com.darksimpson.jdjitools.duml;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.Queue;
 
@@ -35,10 +36,6 @@ public class Decoder1 {
 		return outputMessages.size();
 	}
 
-	public int getDebugNoBytesAvailForFrameBody() {
-		return debugNoBytesAvailForFrameBody;
-	}
-
 	public Message1 getMessage() throws DumlException {
 		if (!outputMessages.isEmpty()) {
 			return outputMessages.remove();
@@ -63,12 +60,12 @@ public class Decoder1 {
 					// Fetch frame header
 					inputBuffer.get(fh, 1, 3);
 					// Check that version and CRC8 matches
-					if ((fh[2] == (byte) 0x04) && (Utils.calcDjiCrc8(fh, 3) == fh[3])) {
+					if (((fh[2] >> 2) == (byte) 0x01) && (Utils.calcDjiCrc8(fh, 3) == fh[3])) {
 						// Version and CRC8 match, proceed if we have needed amount of bytes in input buffer for rest of frame
 						if (inputBuffer.limit() - inputBuffer.position() >= fh[1] - 4) {
 							debugIncompleteFrameBodyArm = false;
 							// Allocate full frame
-							byte[] ff = new byte[fh[1]];
+							byte[] ff = new byte[((fh[2] & (byte) 0x03) << 8) | fh[1]];
 							// Copy frame header for CRC calculation
 							System.arraycopy(fh, 0, ff, 0, 4);
 							// Fetch rest of frame
@@ -81,14 +78,12 @@ public class Decoder1 {
 								Message1 message = new Message1();
 								message.setMessageSource(ff[4]);
 								message.setMessageTarget(ff[5]);
-								message.setMessageSequence(((ff[7] << 8) & 0xFF00) | (ff[6] & 0xFF));
-								if ((ff[8] & (byte) 0x80) != 0) {
-									message.setMessageFlagIsResponse(true);
+								try {
+									message.setMessageSequence(Arrays.copyOfRange(ff, 6, 8));
+								} catch (DumlException e) {
+									// NOTE: We should not get here as always passing exactly 2 bytes
 								}
-								if ((ff[8] & (byte) 0x40) != 0) {
-									message.setMessageFlagWantResponse(true);
-								}
-								message.debugSetMessageFlagsByte(ff[8]); // For debug purposes
+								message.setMessageFlags(ff[8]);
 								message.setMessageCommandSet(ff[9]);
 								message.setMessageCommandNum(ff[10]);
 								byte[] messageData = new byte[ff.length - 13];
@@ -97,7 +92,6 @@ public class Decoder1 {
 								outputMessages.add(message);
 							} else {
 								// Found frame with corrupted CRC16
-								// TODO: Signal about it somehow?
 								debugCrc16Mismatch += 1;
 							}
 						} else {
@@ -165,5 +159,9 @@ public class Decoder1 {
 
 	public int debugGetNoBytesAvailForFrameHeader() {
 		return debugNoBytesAvailForFrameHeader;
+	}
+
+	public int debugGetNoBytesAvailForFrameBody() {
+		return debugNoBytesAvailForFrameBody;
 	}
 }

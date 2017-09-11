@@ -14,14 +14,14 @@ At this moment available:
 - FTPd decryptor util: Decrypt files downloaded from DJI product onboard FTP server (with correct descrambling of first bytes and padding handling)
 - DUML monitor util: Monitor and display (or save to text file) incoming DUML traffic from serial device
 - DUML decoder util: Decode and display (or save to text file) DUML traffic from (captured) binary file
+- DUML command util: Possibility to freely execute any needed DUML command
 
 WIP now (need some rework/clean up before publishing):
-- DUML command util: Possibility to freely execute any needed DUML command
 - FC params util: Read/write UAV FC params using DUML to f.e. unlock some product restrictions (Assistant-less)
-- Updater util: Send FW update package to DJI product and monitor progress (Assistant-less)
 
 Plans:
 - Rooting util: Port of P0VsRedHerring exploit using DUML (Assistant-less), may be some others exploits in future
+- Updater util: Send FW update package to DJI product and monitor progress (Assistant-less)
 - Updates downloader: Download FW update packages from DJI servers and make offline package suitable to use with Updater util
 - Firmware manipulation util: Completely unpack and pack back FW images (may be useful for reversing)
 - ... other useful stuff (you can suggest it) ...
