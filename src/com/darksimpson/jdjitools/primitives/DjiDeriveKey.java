@@ -13,7 +13,7 @@ import java.security.NoSuchAlgorithmException;
 public class DjiDeriveKey {
 	public byte[] deriveKey(byte[] inKey, String inParam, int outKeyLen) throws JDTException {
 		// Do some checks
-		if (inKey.length != 32) {
+		if (inKey.length != 16) {
 			throw new JDTException("Invalid input key length, must be exactly 16 bytes (32 symbols in hexadecimal representation)");
 		}
 		if (outKeyLen < 1 || outKeyLen > 32) {

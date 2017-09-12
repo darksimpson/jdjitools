@@ -50,7 +50,7 @@ public class CommandShell {
 			"Copyright (c) " + JDJITOOLS_COPYRIGHT + "\n\n" +
 			"Great thanks to all the folks digging deep into DJI stuff aka\n" +
 			"#DeejayeyeHackingClub / \"The OG's\" (Original Gangsters),\n" +
-			"especially: @freaky123, @hostile, @the_lord and many others...";
+			"especially: @freaky123, @hostile, @the_lord, @jezzab and others...";
 	}
 
 	@Command(name="util-dji-derive-key", abbrev="uddk", description="DJI primitive for ciphering/scrambling/authentication key derivation (variable derived key length)")
@@ -80,19 +80,21 @@ public class CommandShell {
 
 	@Command(name="util-decrypt-ftp-file", abbrev="udff", description="Decrypt file downloaded from DJI device on-board FTP daemon (different input and output files)")
 	public void cliUtilDecryptFTPFile(@Param(name="in-file-name", description="Encrypted (input) file name to read data from") String inFileName,
-																@Param(name="out-file-name", description="Decrypted (output) file name to write data to") String outFileName) throws JDTException {
+																    @Param(name="out-file-name", description="Decrypted (output) file name to write data to") String outFileName,
+																		@Param(name="key-number", description="Key number to decrypt data (can be 1 or 2)") int keyNumber) throws JDTException {
 		thisShell.outputSimple("Decrypting file '" + inFileName + "'...");
 
 		DecryptFTPFile df = new DecryptFTPFile();
 
-		df.decryptFTPFile(new File(inFileName), new File(outFileName));
+		df.decryptFTPFile(new File(inFileName), new File(outFileName), keyNumber);
 
 		thisShell.outputSimple("Done decrypting to '" + outFileName + "'");
 	}
 
 	@Command(name="util-decrypt-ftp-file", abbrev="udff", description="Decrypt file downloaded from DJI device on-board FTP daemon (same input and output file)")
-	public void cliUtilDecryptFTPFile(@Param(name="file-name", description="Encrypted file name, contents will be overwritten with decrypted data") String fileName) throws JDTException {
-		cliUtilDecryptFTPFile(fileName, fileName);
+	public void cliUtilDecryptFTPFile(@Param(name="file-name", description="Encrypted file name, contents will be overwritten with decrypted data") String fileName,
+																		@Param(name="key-number", description="Key number to decrypt data (can be 1 or 2)") int keyNumber) throws JDTException {
+		cliUtilDecryptFTPFile(fileName, fileName, keyNumber);
 	}
 
 	@Command(name="serial-list-serial-ports", abbrev="slsp", description="List serial ports available in your system")
@@ -272,13 +274,13 @@ public class CommandShell {
 
 	@Command(name="duml-send-arbitrary-message", abbrev="dsam", description="Send any DUML message to device and (if you need) wait/decode response")
 	public void cliDumlSendArbitraryMessage(@Param(name="serial-name", description="Serial port name") String serialName,
-																					@Param(name="duml-msg-src", description="DUML message source (hex or integer)") String dumlMsgSrc,
-																					@Param(name="duml-msg-tgt", description="DUML message target (hex or integer)") String dumlMsgTgt,
-																					@Param(name="duml-msg-seq", description="DUML message sequence (hex or integer)") String dumlMsgSeq,
-																					@Param(name="duml-msg-want-rsp", description="DUML message 'want response' (WACK) flag (boolean)") boolean dumlMsgWantRsp,
-																					@Param(name="duml-msg-cmd-set", description="DUML message command set (hex or integer)") String dumlMsgCmdSet,
-																					@Param(name="duml-msg-cmd-num", description="DUML message command number (hex or integer)") String dumlMsgCmdNum,
-																					@Param(name="duml-msg-data", description="DUML message data (hex or string), single or multiple times") String... dumlMsgData) throws JDTException {
+																					@Param(name="duml-msg-src", description="DUML message source (hex starting with '0x' or integer)") String dumlMsgSrc,
+																					@Param(name="duml-msg-tgt", description="DUML message target (hex starting with '0x' or integer)") String dumlMsgTgt,
+																					@Param(name="duml-msg-seq", description="DUML message sequence (hex starting with '0x' or integer)") String dumlMsgSeq,
+																					@Param(name="duml-msg-want-rsp", description="DUML message 'want response' (WACK) flag ('true' if you want response, 'false' otherwise)") boolean dumlMsgWantRsp,
+																					@Param(name="duml-msg-cmd-set", description="DUML message command set (hex starting with '0x' or integer)") String dumlMsgCmdSet,
+																					@Param(name="duml-msg-cmd-num", description="DUML message command number (hex starting with '0x' or integer)") String dumlMsgCmdNum,
+																					@Param(name="duml-msg-data", description="DUML message data (hex starting with '0x' or string)") String... dumlMsgData) throws JDTException {
 		byte[] dumlMsgSrcB = Utils.getBytesFromHexOrIntString(dumlMsgSrc, 255);
 		byte[] dumlMsgTgtB = Utils.getBytesFromHexOrIntString(dumlMsgTgt, 255);
 		byte[] dumlMsgSeqB = Utils.getBytesFromHexOrIntString(dumlMsgSeq, 65535);
@@ -398,13 +400,13 @@ public class CommandShell {
 	}
 
 	@Command(name="duml-send-arbitrary-message", abbrev="dsam", description="Send any DUML message to device and (if you need) wait/decode response")
-	public void cliDumlSendArbitraryMessage(@Param(name="serial-name", description="Serial port name") String serialName,
-																					@Param(name="duml-msg-src", description="DUML message source") String dumlMsgSrc,
-																					@Param(name="duml-msg-tgt", description="DUML message target") String dumlMsgTgt,
-																					@Param(name="duml-msg-seq", description="DUML message sequence") String dumlMsgSeq,
-																					@Param(name="duml-msg-want-rsp", description="DUML message 'want response' (WACK) flag") boolean dumlMsgWantRsp,
-																					@Param(name="duml-msg-cmd-set", description="DUML message command set") String dumlMsgCmdSet,
-																					@Param(name="duml-msg-cmd-num", description="DUML message command number") String dumlMsgCmdNum) throws JDTException {
+	public void cliDumlSendArbitraryMessage(@Param(name="serial-name", description="Serial port name (hex starting with '0x' or integer)") String serialName,
+																					@Param(name="duml-msg-src", description="DUML message source (hex starting with '0x' or integer)") String dumlMsgSrc,
+																					@Param(name="duml-msg-tgt", description="DUML message target (hex starting with '0x' or integer)") String dumlMsgTgt,
+																					@Param(name="duml-msg-seq", description="DUML message sequence (hex starting with '0x' or integer)") String dumlMsgSeq,
+																					@Param(name="duml-msg-want-rsp", description="DUML message 'want response' (WACK) flag ('true' if you want response, 'false' otherwise)") boolean dumlMsgWantRsp,
+																					@Param(name="duml-msg-cmd-set", description="DUML message command set (hex starting with '0x' or integer)") String dumlMsgCmdSet,
+																					@Param(name="duml-msg-cmd-num", description="DUML message command number (hex starting with '0x' or integer)") String dumlMsgCmdNum) throws JDTException {
 		cliDumlSendArbitraryMessage(serialName, dumlMsgSrc, dumlMsgTgt, dumlMsgSeq, dumlMsgWantRsp, dumlMsgCmdSet, dumlMsgCmdNum, null);
 	}
 }

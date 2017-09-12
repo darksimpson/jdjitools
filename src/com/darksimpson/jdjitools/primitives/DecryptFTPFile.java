@@ -11,12 +11,21 @@ import javax.crypto.spec.SecretKeySpec;
 import java.io.*;
 
 public class DecryptFTPFile {
-	public void decryptFTPFile(File inFile, File outFile) throws JDTException {
+	private static final String iv1Str = "0123456789abcdef";
+	private static final String key1Str = "this-aes-key\0\0\0\0"; //String key1Hex = "746869732d6165732d6b657900000000";
+
+	private static final String iv2Str = "0123456789abcdef";
+	private static final String key2Str = "YP1Nag7ZR&Dj\0\0\0\0";
+
+	public void decryptFTPFile(File inFile, File outFile, int keyNum) throws JDTException {
 		if (inFile == null) {
 			throw new JDTException("Input file must not be null");
 		}
 		if (outFile == null) {
 			throw new JDTException("Output file must not be null");
+		}
+		if (keyNum < 1 || keyNum > 2) {
+			throw new JDTException("Key number must be between 1 and 2");
 		}
 
 		FileInputStream fis;
@@ -41,27 +50,32 @@ public class DecryptFTPFile {
 			}
 		}
 
-		String keyHex = "746869732d6165732d6b657900000000"; // "this-aes-key\0\0\0\0"
-		byte[] keyBytes = Utils.hexStringToBytes(keyHex);
-
 		byte[] decBytes; // = new byte[encBytes.length];
 
+		byte[] ivBytes = new byte[16];
+		byte[] keyBytes = new byte[16];
+
+		switch (keyNum) {
+			case 1: {
+				ivBytes = Utils.singleByteStringToBytes(iv1Str);
+				keyBytes = Utils.singleByteStringToBytes(key1Str);
+				break;
+			}
+			case 2: {
+				ivBytes = Utils.singleByteStringToBytes(iv2Str);
+				keyBytes = Utils.singleByteStringToBytes(key2Str);
+				break;
+			}
+		}
+
 		try {
-			IvParameterSpec iv = new IvParameterSpec(new byte[16]);
+			IvParameterSpec iv = new IvParameterSpec(ivBytes);
 			SecretKey k = new SecretKeySpec(keyBytes, 0, keyBytes.length, "AES");
 			Cipher c = Cipher.getInstance("AES/CBC/NoPadding");
 			c.init(Cipher.DECRYPT_MODE, k, iv);
 			decBytes = c.doFinal(encBytes);
 		} catch (Exception e) {
 			throw new JDTException("Can't perform AES decryption: " + e.getMessage());
-		}
-
-		// Descramble first 16 bytes
-		for (int i = 0x00; i < 0x0A; i++) {
-			decBytes[i] ^= 0x30 + i;
-		}
-		for (int i = 0x0A; i < 0x10; i++) {
-			decBytes[i] ^= 0x57 + i;
 		}
 
 		// Calc real length (without padding)
