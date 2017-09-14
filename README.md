@@ -26,6 +26,8 @@ Plans:
 - Firmware manipulation util: Completely unpack and pack back FW images (may be useful for reversing)
 - ... other useful stuff (you can suggest it) ...
 
+**If you want some detailed usage instructions, please see USAGE.md file.**
+
 ### #DeejayeyeHackingClub information repos aka "The OG's" (Original Gangsters)
 
 http://dji.retroroms.info/ - "Wiki"

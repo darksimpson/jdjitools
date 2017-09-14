@@ -12,12 +12,12 @@ import java.io.*;
 
 public class DecryptFTPFile {
 	private static final String iv1Str = "0123456789abcdef";
-	private static final String key1Str = "this-aes-key\0\0\0\0"; //String key1Hex = "746869732d6165732d6b657900000000";
+	private static final String key1Str = "this-aes-key\0\0\0\0";
 
 	private static final String iv2Str = "0123456789abcdef";
 	private static final String key2Str = "YP1Nag7ZR&Dj\0\0\0\0";
 
-	public void decryptFTPFile(File inFile, File outFile, int keyNum) throws JDTException {
+	public void decryptFTPFile(int keyNum, File inFile, File outFile) throws JDTException {
 		if (inFile == null) {
 			throw new JDTException("Input file must not be null");
 		}

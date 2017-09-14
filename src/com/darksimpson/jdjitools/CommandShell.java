@@ -79,22 +79,22 @@ public class CommandShell {
 	}
 
 	@Command(name="util-decrypt-ftp-file", abbrev="udff", description="Decrypt file downloaded from DJI device on-board FTP daemon (different input and output files)")
-	public void cliUtilDecryptFTPFile(@Param(name="in-file-name", description="Encrypted (input) file name to read data from") String inFileName,
-																    @Param(name="out-file-name", description="Decrypted (output) file name to write data to") String outFileName,
-																		@Param(name="key-number", description="Key number to decrypt data (can be 1 or 2)") int keyNumber) throws JDTException {
+	public void cliUtilDecryptFTPFile(@Param(name="key-number", description="Key number to decrypt data (can be 1 or 2)") int keyNumber,
+																		@Param(name="in-file-name", description="Encrypted (input) file name to read data from") String inFileName,
+																    @Param(name="out-file-name", description="Decrypted (output) file name to write data to") String outFileName) throws JDTException {
 		thisShell.outputSimple("Decrypting file '" + inFileName + "'...");
 
 		DecryptFTPFile df = new DecryptFTPFile();
 
-		df.decryptFTPFile(new File(inFileName), new File(outFileName), keyNumber);
+		df.decryptFTPFile(keyNumber, new File(inFileName), new File(outFileName));
 
 		thisShell.outputSimple("Done decrypting to '" + outFileName + "'");
 	}
 
 	@Command(name="util-decrypt-ftp-file", abbrev="udff", description="Decrypt file downloaded from DJI device on-board FTP daemon (same input and output file)")
-	public void cliUtilDecryptFTPFile(@Param(name="file-name", description="Encrypted file name, contents will be overwritten with decrypted data") String fileName,
-																		@Param(name="key-number", description="Key number to decrypt data (can be 1 or 2)") int keyNumber) throws JDTException {
-		cliUtilDecryptFTPFile(fileName, fileName, keyNumber);
+	public void cliUtilDecryptFTPFile(@Param(name="key-number", description="Key number to decrypt data (can be 1 or 2)") int keyNumber,
+																		@Param(name="file-name", description="Encrypted file name, contents will be overwritten with decrypted data") String fileName) throws JDTException {
+		cliUtilDecryptFTPFile(keyNumber, fileName, fileName);
 	}
 
 	@Command(name="serial-list-serial-ports", abbrev="slsp", description="List serial ports available in your system")
